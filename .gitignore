@@ -29,11 +29,12 @@
 *.pyc
 dist/
 build/
-vnpy_ctp.egg-info/
+*.egg-info/
 __pycache__/
 
 # Visual Studio
 .vs/
 x64/
 .idea/
+
 

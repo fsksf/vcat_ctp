@@ -186,6 +186,7 @@ class CtpGateway(BaseGateway):
 
     def connect(self, setting: dict) -> None:
         """连接交易接口"""
+        print('connect ctp')
         self.config_setting.userid = userid = setting["userid"]
         self.config_setting.password = password = setting["password"]
         self.config_setting.brokerid = brokerid = setting["brokerid"]
@@ -348,8 +349,8 @@ class CtpMdApi(MdApi):
         tick: TickData = TickData(
             code=symbol,
             exchange=contract.exchange,
-            datetime=dt,
-            name=contract.name,
+            dt=dt,
+            contract_type=contract.contract_type,
             volume=data["Volume"],
             turnover=data["Turnover"],
             open_interest=data["OpenInterest"],
@@ -522,13 +523,14 @@ class CtpTdApi(TdApi):
         order: OrderData = OrderData(
             code=symbol,
             exchange=contract.exchange,
-            orderid=orderid,
+            t_order_id=orderid,
             direction=DIRECTION_CTP2VT[data["Direction"]],
             offset=OFFSET_CTP2VT.get(data["CombOffsetFlag"], Offset.NONE),
-            price=data["LimitPrice"],
+            limit_price=data["LimitPrice"],
             volume=data["VolumeTotalOriginal"],
             status=OrderStatus.SUBMIT,
-            gateway_name=self.gateway_name
+            gateway_name=self.gateway_name,
+            contract_type=contract.contract_type
         )
         self.gateway.on_order(order)
 
@@ -570,7 +572,8 @@ class CtpTdApi(TdApi):
                     code=data["InstrumentID"],
                     exchange=contract.exchange,
                     direction=DIRECTION_CTP2VT[data["PosiDirection"]],
-                    gateway_name=self.gateway_name
+                    gateway_name=self.gateway_name,
+                    contract_type=contract.contract_type
                 )
                 self.positions[key] = position
 
@@ -583,10 +586,10 @@ class CtpTdApi(TdApi):
                 position.yd_volume = data["Position"] - data["TodayPosition"]
 
             # 获取合约的乘数信息
-            size: int = contract.size
+            size: int = contract.lot_size
 
             # 计算之前已有仓位的持仓总成本
-            cost: float = position.price * position.volume * size
+            cost: float = position.avg_price * position.volume * size
 
             # 累加更新持仓数量和盈亏
             position.volume += data["Position"]
@@ -595,7 +598,7 @@ class CtpTdApi(TdApi):
             # 计算更新后的持仓总成本和均价
             if position.volume and size:
                 cost += data["PositionCost"]
-                position.price = cost / (position.volume * size)
+                position.avg_price = cost / (position.volume * size)
 
             # 更新仓位冻结数量
             if position.direction == Direction.LONG:
@@ -615,7 +618,7 @@ class CtpTdApi(TdApi):
             return
 
         account: AccountData = AccountData(
-            accountid=data["AccountID"],
+            account_id=data["AccountID"],
             balance=data["Balance"],
             frozen=data["FrozenMargin"] + data["FrozenCash"] + data["FrozenCommission"],
             gateway_name=self.gateway_name
@@ -626,20 +629,20 @@ class CtpTdApi(TdApi):
 
     def onRspQryInstrument(self, data: dict, error: dict, reqid: int, last: bool) -> None:
         """合约查询回报"""
-        product: Product = PRODUCT_CTP2VT.get(data["ProductClass"], None)
-        if product:
+        contract_type: ContractType = PRODUCT_CTP2VT.get(data["ProductClass"], None)
+        if contract_type:
             contract: ContractData = ContractData(
                 code=data["InstrumentID"],
                 exchange=EXCHANGE_CTP2VT[data["ExchangeID"]],
                 name=data["InstrumentName"],
-                product=product,
-                size=data["VolumeMultiple"],
-                pricetick=data["PriceTick"],
+                contract_type=contract_type,
+                lot_size=data["VolumeMultiple"],
+                price_tick=data["PriceTick"],
                 gateway_name=self.gateway_name
             )
 
             # 期权相关
-            if contract.product == Product.OPTION:
+            if contract.contract_type == ContractType.OPT:
                 # 移除郑商所期权产品名称带有的C/P后缀
                 if contract.exchange == Exchange.CZCE:
                     contract.option_portfolio = data["ProductID"][:-1]
@@ -701,7 +704,8 @@ class CtpTdApi(TdApi):
             traded=data["VolumeTraded"],
             status=STATUS_CTP2VT[data["OrderStatus"]],
             dt=dt,
-            gateway_name=self.gateway_name
+            gateway_name=self.gateway_name,
+            contract_type=contract.contract_type
         )
         self.gateway.on_order(order)
 
@@ -731,8 +735,9 @@ class CtpTdApi(TdApi):
             offset=OFFSET_CTP2VT[data["OffsetFlag"]],
             price=data["Price"],
             volume=data["Volume"],
-            datetime=dt,
-            gateway_name=self.gateway_name
+            dt=dt,
+            gateway_name=self.gateway_name,
+            contract_type=contract.contract_type
         )
         self.gateway.on_trade(trade)
 
