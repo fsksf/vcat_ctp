@@ -144,7 +144,7 @@ class CtpGateway(BaseGateway):
     对接期货CTP柜台的交易接口。
     """
 
-    gateway_name: str = "CtpGateway"
+    gateway_name: str = "CTP"
 
     @dataclass
     class ConfigSetting(MetaObj):
@@ -159,8 +159,8 @@ class CtpGateway(BaseGateway):
 
         def meta(self):
             _meta = DivMetaInfo(
-                name='登录CTP',
-                title='CTP-Gateway',
+                name='CTP',
+                title='登录CTP',
                 headers=[
                     TagMetaInfo(name='用户名', field='userid', value=self.userid),
                     TagMetaInfo(name='密码', field='password', value=self.password),
